@@ -86,7 +86,7 @@ class MusicFeature extends Service {
         });
         try {
             const musicResponse = await MusicApiService.generateMusic(
-                {custom_mode: true, prompt, mv: "sonic-v3-5"},
+                {custom_mode: true, prompt: " ", mv: "sonic-v3-5", gpt_description_prompt: prompt},
                 undefined,
                 telegramUser["id"]
             );
