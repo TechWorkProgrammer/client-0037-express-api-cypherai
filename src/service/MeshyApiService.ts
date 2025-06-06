@@ -1,0 +1,197 @@
+import axios from "axios";
+import Variables from "@/config/Variables";
+import CustomError from "@/middleware/CustomError";
+import Service from "@/service/Service";
+import {GenerateMeshPayload, MeshApiResponse} from "@/types/mesh";
+import {Mesh} from "@prisma/client";
+import MeshWorker from "@/workers/MeshWorker";
+import MeshMasterWorker from "@/workers/MeshMasterWorker";
+
+class MeshyApiService extends Service {
+    private static baseUrl = "https://api.meshy.ai/openapi/v2/text-to-3d";
+
+    public static async generateMesh(payload: GenerateMeshPayload, userId?: string, telegramUserId?: string): Promise<Mesh> {
+        try {
+
+            let response;
+            let taskId;
+            let aiVersion;
+            if (!payload.mode) {
+                response = await axios.post(`https://api.genai.masterpiecex.com/v2/functions/general`, payload, {
+                    headers: {
+                        Accept: "application/json",
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Variables.MASTERX_API_KEY}`
+                    }
+                });
+
+                taskId = response.data.requestId;
+                aiVersion = "master";
+
+            } else {
+                const highQualityPayload: GenerateMeshPayload & {
+                    ai_model?: string;
+                    topology?: string;
+                    target_polycount?: number;
+                    symmetry_mode?: string;
+                } = {
+                    ...payload,
+                    mode: "preview",
+                    art_style: payload.art_style || "realistic",
+                    ai_model: "meshy-4",
+                    topology: "quad",
+                    target_polycount: 300000,
+                    should_remesh: true,
+                    symmetry_mode: "on"
+                };
+                const response = await axios.post<MeshApiResponse>(`${this.baseUrl}`, highQualityPayload, {
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Variables.MESHY_API_KEY}`
+                    }
+                });
+
+                taskId = response.data.result;
+                aiVersion = "meshy";
+            }
+            if (userId) {
+                await this.prisma.user.update({
+                    where: {id: userId},
+                    data: {
+                        point: {
+                            increment: 10,
+                        }
+                    }
+                });
+            }
+            const mesh = await this.prisma.mesh.create({
+                data: {
+                    taskIdPreview: taskId,
+                    taskIdRefine: aiVersion === "master" ? taskId : null,
+                    prompt: payload.prompt,
+                    modelType: payload.art_style ? payload.art_style : "",
+                    state: "pending",
+                    aiVersion,
+                    userId,
+                    telegramUserId
+                }
+            });
+
+            (aiVersion === "meshy")
+                ? MeshWorker.addToQueue(taskId)
+                : MeshMasterWorker.addToQueue(taskId);
+
+            return mesh;
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.error || error.message || "Unknown error";
+            this.handleError(new CustomError(`Failed to generate 3D model: ${errorMessage}`, 500));
+            throw new CustomError(`Failed to generate 3D model: ${errorMessage}`, 500);
+        }
+    }
+
+    public static async getMeshResult(taskId: string): Promise<Mesh> {
+        try {
+            await this.prisma.mesh.updateMany({
+                where: {
+                    OR: [
+                        {taskIdPreview: taskId},
+                        {taskIdRefine: taskId}
+                    ]
+                },
+                data: {totalView: {increment: 1}},
+            });
+            return await this.prisma.mesh.findFirstOrThrow({
+                where: {
+                    OR: [
+                        {taskIdPreview: taskId},
+                        {taskIdRefine: taskId}
+                    ]
+                },
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            username: true
+                        }
+                    },
+                    textures: true,
+                }
+            });
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.error || error.message || "Failed to fetch mesh result";
+            this.handleError(new CustomError(`Failed to fetch mesh result: ${errorMessage}`, 500));
+            throw new CustomError(`Failed to fetch mesh result: ${errorMessage}`, 500);
+        }
+    }
+
+    public static async getUserMeshes(userId: string): Promise<any[]> {
+        try {
+            return await this.prisma.mesh.findMany({
+                where: {userId},
+                select: {
+                    id: true,
+                    prompt: true,
+                    taskIdPreview: true,
+                    taskIdRefine: true,
+                    previewImage: true,
+                    refineImage: true,
+                    aiVersion: true,
+                    createdAt: true,
+                    user: {
+                        select: {
+                            id: true,
+                            username: true,
+                        },
+                    },
+                },
+            });
+        } catch (error) {
+            this.handleError(new CustomError("Failed to fetch user meshes", 500));
+            throw error;
+        }
+    }
+
+    public static async getTelegramMeshes(telegramUserId: string): Promise<Mesh []> {
+        try {
+            return await this.prisma.mesh.findMany({
+                where: {telegramUserId},
+            });
+        } catch (error) {
+            this.handleError(new CustomError("Failed to fetch telegram music", 500));
+            throw error;
+        }
+    }
+
+    public static async getAllMeshes(): Promise<any[]> {
+        try {
+            return await this.prisma.mesh.findMany({
+                where: {
+                    userId: {
+                        not: null,
+                    },
+                },
+                select: {
+                    id: true,
+                    prompt: true,
+                    taskIdPreview: true,
+                    taskIdRefine: true,
+                    previewImage: true,
+                    refineImage: true,
+                    aiVersion: true,
+                    createdAt: true,
+                    user: {
+                        select: {
+                            id: true,
+                            username: true,
+                        },
+                    },
+                },
+            });
+        } catch (error) {
+            this.handleError(new CustomError("Failed to fetch all meshes", 500));
+            throw error;
+        }
+    }
+}
+
+export default MeshyApiService;
