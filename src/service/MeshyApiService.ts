@@ -9,7 +9,8 @@ import MeshMasterWorker from "@/workers/MeshMasterWorker";
 
 class MeshyApiService extends Service {
     private static baseUrl = "https://api.meshy.ai/openapi/v2/text-to-3d";
-    private static readonly COOLDOWN_MS = 30 * 60 * 1000;
+    private static readonly COOLDOWN_MS = 5 * 60 * 1000;
+    private static readonly PENDING_COOLDOWN_MS = 30 * 60 * 1000;
 
     public static async generateMesh(payload: GenerateMeshPayload, userId?: string, telegramUserId?: string): Promise<Mesh> {
         try {
@@ -202,21 +203,22 @@ class MeshyApiService extends Service {
             orderBy: {createdAt: "desc"},
             select: {id: true, state: true, createdAt: true},
         });
-        if (!last) {
-            return {ok: true};
-        }
+        if (!last) return {ok: true};
 
         const now = Date.now();
         const elapsed = now - last.createdAt.getTime();
 
-        if (last.state === "pending" && elapsed < this.COOLDOWN_MS) {
+        if (last.state === "pending" && elapsed < this.PENDING_COOLDOWN_MS) {
+            const minutesLeft = Math.ceil(
+                (this.PENDING_COOLDOWN_MS - elapsed) / 60000
+            );
             return {
                 ok: false,
-                message: "⚠️ You already have a mesh generation in progress. Please wait for it to finish or 30 minutes to pass before starting a new one."
+                message: `⚠️ You have a mesh generation in progress. Please wait another ${minutesLeft} minute(s) (up to 30 minutes) before starting a new one.`
             };
         }
 
-        if (last.state === "pending" && elapsed >= this.COOLDOWN_MS) {
+        if (last.state === "pending" && elapsed >= this.PENDING_COOLDOWN_MS) {
             await this.prisma.mesh.update({
                 where: {id: last.id},
                 data: {state: "timeout"},
@@ -224,16 +226,16 @@ class MeshyApiService extends Service {
         }
 
         if (elapsed < this.COOLDOWN_MS) {
-            const minutesLeft = Math.ceil((this.COOLDOWN_MS - elapsed) / 60000);
+            const minutesLeft = Math.ceil(
+                (this.COOLDOWN_MS - elapsed) / 60000
+            );
             return {
                 ok: false,
                 message: `⚠️ Please wait another ${minutesLeft} minute(s) before generating a new mesh.`
             };
         }
-
         return {ok: true};
     }
-
 }
 
 export default MeshyApiService;
