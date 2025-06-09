@@ -9,6 +9,7 @@ import MeshMasterWorker from "@/workers/MeshMasterWorker";
 
 class MeshyApiService extends Service {
     private static baseUrl = "https://api.meshy.ai/openapi/v2/text-to-3d";
+    private static readonly COOLDOWN_MS = 30 * 60 * 1000;
 
     public static async generateMesh(payload: GenerateMeshPayload, userId?: string, telegramUserId?: string): Promise<Mesh> {
         try {
@@ -192,6 +193,47 @@ class MeshyApiService extends Service {
             throw error;
         }
     }
+
+    public static async checkCooldown(
+        telegramUserId: string
+    ): Promise<{ ok: true } | { ok: false; message: string }> {
+        const last = await this.prisma.mesh.findFirst({
+            where: {telegramUserId},
+            orderBy: {createdAt: "desc"},
+            select: {id: true, state: true, createdAt: true},
+        });
+        if (!last) {
+            return {ok: true};
+        }
+
+        const now = Date.now();
+        const elapsed = now - last.createdAt.getTime();
+
+        if (last.state === "pending" && elapsed < this.COOLDOWN_MS) {
+            return {
+                ok: false,
+                message: "⚠️ You already have a mesh generation in progress. Please wait for it to finish or 30 minutes to pass before starting a new one."
+            };
+        }
+
+        if (last.state === "pending" && elapsed >= this.COOLDOWN_MS) {
+            await this.prisma.mesh.update({
+                where: {id: last.id},
+                data: {state: "timeout"},
+            });
+        }
+
+        if (elapsed < this.COOLDOWN_MS) {
+            const minutesLeft = Math.ceil((this.COOLDOWN_MS - elapsed) / 60000);
+            return {
+                ok: false,
+                message: `⚠️ Please wait another ${minutesLeft} minute(s) before generating a new mesh.`
+            };
+        }
+
+        return {ok: true};
+    }
+
 }
 
 export default MeshyApiService;

@@ -35,8 +35,7 @@ class MeshFeature extends Service {
                             {parse_mode: "HTML"}
                         );
                     }
-                }
-                else if (msg.text.startsWith("/mesh ")) {
+                } else if (msg.text.startsWith("/mesh ")) {
                     const prompt = msg.text.replace("/mesh ", "").trim();
                     if (prompt) {
                         await this.generateMesh(bot, chatId, telegramId, prompt);
@@ -172,11 +171,6 @@ class MeshFeature extends Service {
         telegramId: string,
         prompt: string
     ): Promise<void> {
-        await bot.sendMessage(
-            chatId,
-            "🖼️ <b>Generating your 3D model (v1)... Please wait!</b>",
-            {parse_mode: "HTML"}
-        );
         const telegramUser = await this.prisma.telegramUser.upsert({
             where: {telegramId},
             update: {},
@@ -185,6 +179,16 @@ class MeshFeature extends Service {
                 username: (await bot.getChat(chatId)).username || "Anonymous"
             }
         });
+        const cooldown = await MeshyApiService.checkCooldown(telegramUser.id);
+        if (!cooldown.ok) {
+            await bot.sendMessage(chatId, cooldown.message, {parse_mode: "HTML"});
+            return;
+        }
+        await bot.sendMessage(
+            chatId,
+            "🖼️ <b>Generating your 3D model... Please wait!</b>",
+            {parse_mode: "HTML"}
+        );
         try {
             const meshResponse = await MeshyApiService.generateMesh(
                 {mode: "preview", prompt, art_style: "realistic", should_remesh: true},
@@ -198,6 +202,10 @@ class MeshFeature extends Service {
             );
         } catch (error: any) {
             console.error("Error generating 3D Model (v1):", error.message);
+            if (error.status === 429) {
+                await bot.sendMessage(chatId, error.message, {parse_mode: "HTML"});
+                return;
+            }
             await bot.sendMessage(
                 chatId,
                 "❌ <b>Failed to generate 3D model (v1). Please try again later.</b>",
@@ -212,11 +220,6 @@ class MeshFeature extends Service {
         telegramId: string,
         prompt: string
     ): Promise<void> {
-        await bot.sendMessage(
-            chatId,
-            "🖼️ <b>Generating your 3D model (v2)... Please wait!</b>",
-            {parse_mode: "HTML"}
-        );
         const telegramUser = await this.prisma.telegramUser.upsert({
             where: {telegramId},
             update: {},
@@ -225,7 +228,18 @@ class MeshFeature extends Service {
                 username: (await bot.getChat(chatId)).username || "Anonymous"
             }
         });
+        const cooldown = await MeshyApiService.checkCooldown(telegramUser.id);
+        if (!cooldown.ok) {
+            await bot.sendMessage(chatId, cooldown.message, {parse_mode: "HTML"});
+            return;
+        }
+        await bot.sendMessage(
+            chatId,
+            "🖼️ <b>Generating your 3D model (v2)... Please wait!</b>",
+            {parse_mode: "HTML"}
+        );
         try {
+
             const meshResponse = await MeshyApiService.generateMesh(
                 {prompt},
                 undefined,
