@@ -8,6 +8,7 @@ import MusicWorker from "@/workers/MusicWorker";
 
 class MusicApiService extends Service {
     private static baseUrl = "https://api.musicapi.ai/api/v1/sonic";
+    private static readonly COOLDOWN_MS = 30 * 60 * 1000;
 
     public static async generateMusic(payload: GenerateMusicPayload, userId?: string, telegramUserId?: string): Promise<Music> {
         try {
@@ -109,6 +110,46 @@ class MusicApiService extends Service {
             this.handleError(new CustomError("Failed to fetch all meshes", 500));
             throw error;
         }
+    }
+
+    public static async checkCooldown(
+        telegramUserId: string
+    ): Promise<{ ok: true } | { ok: false; message: string }> {
+        const last = await this.prisma.music.findFirst({
+            where: {telegramUserId},
+            orderBy: {createdAt: "desc"},
+            select: {id: true, state: true, createdAt: true},
+        });
+        if (!last) {
+            return {ok: true};
+        }
+
+        const now = Date.now();
+        const elapsed = now - last.createdAt.getTime();
+
+        if (last.state === "pending" && elapsed < this.COOLDOWN_MS) {
+            return {
+                ok: false,
+                message: "⚠️ You already have a music generation in progress. Please wait for it to finish or 30 minutes to pass before starting a new one."
+            };
+        }
+
+        if (last.state === "pending" && elapsed >= this.COOLDOWN_MS) {
+            await this.prisma.mesh.update({
+                where: {id: last.id},
+                data: {state: "timeout"},
+            });
+        }
+
+        if (elapsed < this.COOLDOWN_MS) {
+            const minutesLeft = Math.ceil((this.COOLDOWN_MS - elapsed) / 60000);
+            return {
+                ok: false,
+                message: `⚠️ Please wait another ${minutesLeft} minute(s) before generating a new music.`
+            };
+        }
+
+        return {ok: true};
     }
 }
 

@@ -75,7 +75,7 @@ class MusicFeature extends Service {
     }
 
     private static async generateMusic(bot: TelegramBot, chatId: number, telegramId: string, prompt: string): Promise<void> {
-        await bot.sendMessage(chatId, "🎵 <b>Generating your music... Please wait!</b>", {parse_mode: "HTML"});
+
         const telegramUser = await this.prisma.telegramUser.upsert({
             where: {telegramId},
             update: {},
@@ -84,6 +84,12 @@ class MusicFeature extends Service {
                 username: (await bot.getChat(chatId)).username || "Anonymous"
             }
         });
+        const cooldown = await MusicApiService.checkCooldown(telegramUser.id);
+        if (!cooldown.ok) {
+            await bot.sendMessage(chatId, cooldown.message, {parse_mode: "HTML"});
+            return;
+        }
+        await bot.sendMessage(chatId, "🎵 <b>Generating your music... Please wait!</b>", {parse_mode: "HTML"});
         try {
             const musicResponse = await MusicApiService.generateMusic(
                 {custom_mode: true, prompt: " ", mv: "sonic-v3-5", gpt_description_prompt: prompt},
