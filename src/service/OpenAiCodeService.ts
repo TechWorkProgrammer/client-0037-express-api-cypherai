@@ -91,7 +91,18 @@ class OpenAiCodeService extends Service {
                 orderBy: {createdAt: Prisma.SortOrder.desc}
             });
         } catch (error) {
-            this.handleError(new CustomError("Failed to fetch user music", 500));
+            this.handleError(new CustomError("Failed to fetch user code", 500));
+            throw error;
+        }
+    }
+
+    public static async getCodeResult(id: string): Promise<GeneratedCode> {
+        try {
+            return await this.prisma.generatedCode.findFirstOrThrow({
+                where: {id}
+            });
+        } catch (error: any) {
+            this.handleError(new CustomError("Failed to fetch code result", 500));
             throw error;
         }
     }
