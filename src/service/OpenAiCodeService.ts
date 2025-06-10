@@ -3,6 +3,7 @@ import CustomError from "@/middleware/CustomError";
 import Service from "@/service/Service";
 
 import OpenAI from "openai";
+import {GeneratedCode, Prisma} from "@prisma/client";
 
 const openai = new OpenAI({
     apiKey: Variables.OPENAI_API_KEY,
@@ -80,6 +81,18 @@ class OpenAiCodeService extends Service {
             const msg = err.response?.data?.error || err.message || "Unknown error";
             this.handleError(new CustomError(`Failed to generate code: ${msg}`, 500));
             throw new CustomError(`Failed to generate code: ${msg}`, 500);
+        }
+    }
+
+    public static async getUserCode(userId: string): Promise<GeneratedCode[]> {
+        try {
+            return await this.prisma.generatedCode.findMany({
+                where: {userId},
+                orderBy: {createdAt: Prisma.SortOrder.desc}
+            });
+        } catch (error) {
+            this.handleError(new CustomError("Failed to fetch user music", 500));
+            throw error;
         }
     }
 }

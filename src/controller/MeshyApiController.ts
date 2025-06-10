@@ -17,13 +17,13 @@ class MeshyApiController {
     public static async getUserMeshy(req: Request, res: Response): Promise<void> {
         const userId = res.locals.user.id;
         const data = await MeshyApiService.getUserMeshes(userId);
-        ResponseHelper.Success(res, "Meshy music fetched", data);
+        ResponseHelper.Success(res, "User mesh fetched", data);
     }
 
     public static async getMeshyByUserId(req: Request, res: Response): Promise<void> {
         const {userId} = req.params;
         const data = await MeshyApiService.getUserMeshes(userId);
-        ResponseHelper.Success(res, "Meshy music fetched", data);
+        ResponseHelper.Success(res, "Mesh fetched", data);
     }
 
     public static async getAllMeshy(req: Request, res: Response): Promise<void> {

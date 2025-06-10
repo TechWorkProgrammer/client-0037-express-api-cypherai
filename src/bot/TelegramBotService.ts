@@ -6,6 +6,7 @@ import ComingSoonFeature from "@/bot/features/ComingSoonFeature";
 
 class TelegramBotService {
     private static bot: TelegramBot;
+    private static cooldowns = new Map<string, { data: string; timestamp: number }>();
 
     public static boot(): void {
         this.bot = new TelegramBot(Variables.BOT_TELEGRAM_TOKEN, {polling: true});
@@ -43,7 +44,22 @@ class TelegramBotService {
         this.bot.removeAllListeners("callback_query");
         this.bot.on("callback_query", async (callbackQuery) => {
             const chatId = callbackQuery.message!.chat.id;
-            const data = callbackQuery.data;
+            const telegramId = callbackQuery.from!.id.toString();
+            const data = callbackQuery.data || "";
+            const key = `${chatId}:${telegramId}`;
+            const now = Date.now();
+            const last = this.cooldowns.get(key);
+
+            if (last && last.data === data && now - last.timestamp < 60000) {
+                await this.bot.answerCallbackQuery(callbackQuery.id, {
+                    text: "Please wait 1 minute before repeating the same action.",
+                    show_alert: true
+                });
+                return;
+            }
+
+            this.cooldowns.set(key, { data, timestamp: now });
+            setTimeout(() => this.cooldowns.delete(key), 60000);
             if (!data || !chatId) {
                 await this.bot.sendMessage(chatId || 0, "❌ <b>Invalid callback query data.</b>", {parse_mode: "HTML"});
                 return;

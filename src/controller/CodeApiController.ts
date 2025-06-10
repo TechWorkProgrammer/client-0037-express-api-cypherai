@@ -10,6 +10,12 @@ class CodeApiController {
         const data = await OpenAiCodeService.generateCode(payload, userId);
         ResponseHelper.Created(res, "Code generation started", data);
     }
+
+    public static async getUserCode(req: Request, res: Response): Promise<void> {
+        const userId = res.locals.user.id;
+        const data = await OpenAiCodeService.getUserCode(userId);
+        ResponseHelper.Success(res, "User code fetched", data);
+    }
 }
 
 export default CodeApiController;
