@@ -17,7 +17,7 @@ class OpenAiCodeService extends Service {
     public static async generateCode(
         payload: GenerateCodePayload,
         userId?: string
-    ): Promise<Record<string, any>> {
+    ): Promise<GeneratedCode> {
 
         const systemPrompt = `
                           You are a code generator. Always respond with valid JSON only, without any comments or extra text.
@@ -52,14 +52,9 @@ class OpenAiCodeService extends Service {
 
             const raw = completion.choices[0].message?.content ?? "";
             let json: Record<string, any>;
+            json = JSON.parse(raw);
 
-            try {
-                json = JSON.parse(raw);
-            } catch (e) {
-                return new CustomError("Response is not valid JSON");
-            }
-
-            await this.prisma.generatedCode.create({
+            const code = await this.prisma.generatedCode.create({
                 data: {
                     userId,
                     prompt: payload.prompt,
@@ -76,7 +71,7 @@ class OpenAiCodeService extends Service {
                 });
             }
 
-            return json;
+            return code;
         } catch (err: any) {
             const msg = err.response?.data?.error || err.message || "Unknown error";
             this.handleError(new CustomError(`Failed to generate code: ${msg}`, 500));
