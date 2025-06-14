@@ -58,7 +58,15 @@ class TelegramBotService {
                 return;
             }
 
-            this.cooldowns.set(key, { data, timestamp: now });
+            if (last && last.data !== data && now - last.timestamp < 3000) {
+                await this.bot.answerCallbackQuery(callbackQuery.id, {
+                    text: "Please wait a few seconds before doing another action.",
+                    show_alert: false
+                });
+                return;
+            }
+
+            this.cooldowns.set(key, {data, timestamp: now});
             setTimeout(() => this.cooldowns.delete(key), 60000);
             if (!data || !chatId) {
                 await this.bot.sendMessage(chatId || 0, "❌ <b>Invalid callback query data.</b>", {parse_mode: "HTML"});
@@ -101,7 +109,7 @@ class TelegramBotService {
                     await MeshFeature.showMeshMenu(this.bot, chatId);
                 } else if (data === "back_main_menu") {
                     this.showMainMenu(chatId);
-                }else if (data === "back_music_menu"){
+                } else if (data === "back_music_menu") {
                     await MusicFeature.showMusicMenu(this.bot, chatId);
                 } else {
                     await this.bot.sendMessage(chatId, "❓ <b>Unknown action.</b>", {parse_mode: "HTML"});

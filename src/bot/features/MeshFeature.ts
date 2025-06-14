@@ -348,7 +348,7 @@ class MeshFeature extends Service {
                 MeshWorker.addToQueue(mesh.taskIdPreview);
                 await bot.sendMessage(
                     chatId,
-                    "⏳ <b>Result is not ready yet. Please try again later.</b>",
+                    "🧠 <b>CypherAI is still working on your 3D model.</b>\n\nHigh-quality results take a little time. Please try again in around <b>3 minutes</b> — your asset will be ready soon!",
                     {parse_mode: "HTML"}
                 );
                 return;

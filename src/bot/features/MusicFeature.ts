@@ -1,6 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import MusicApiService from "@/service/MusicApiService";
 import Service from "@/service/Service";
+import MusicWorker from "@/workers/MusicWorker";
 
 class MusicFeature extends Service {
     public static init(bot: TelegramBot): void {
@@ -162,6 +163,17 @@ class MusicFeature extends Service {
             const music = await MusicApiService.getMusicResult(taskId);
             if (!music) {
                 await bot.sendMessage(chatId, "❌ <b>Music not found.</b>", {parse_mode: "HTML"});
+                return;
+            }
+
+            if (music.state === "pending") {
+                console.log(`🟡 [showMusicDetails] Task ID: ${taskId} is still pending.`);
+                MusicWorker.addToQueue(music.taskId);
+                await bot.sendMessage(
+                    chatId,
+                    "🎧 <b>CypherAI is still creating your music track.</b>\n\nGreat tunes take time! Try checking back in <b>about 3 minutes</b> — it’ll be worth the wait.",
+                    {parse_mode: "HTML"}
+                );
                 return;
             }
             const caption = `🎶 <b>${music.title || "Untitled"}</b>\n🆔 <b>Task ID:</b> <code>${music.taskId}</code>`;
